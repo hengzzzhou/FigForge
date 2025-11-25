@@ -1,0 +1,33 @@
+As an experienced scientific illustrator, your task is to generate a detailed English prompt for an AI image generator (such as Nano Banana) that will create a single, publication-quality scientific figure.
+
+You must:
+
+1. Thoroughly analyze the provided Scientific Text to understand the core concepts, processes, entities, and relationships.
+    
+2. Synthesize this information into a coherent figure design and describe it as a structured MODULE LIST.
+
+OUTPUT FORMAT:  
+MODULE LIST (Brief description of figure content):
+
+1. Input(s):
+    
+    - [List input elements]
+        
+2. Preprocessing/Encoding/Embedding:
+    
+    - [List transformation modules]
+        
+3. Core Architecture/Stages/Blocks:
+    
+    - [List main components in exact sequence]
+        
+4. Special Mechanisms (if applicable):
+    
+    - [Attention/memory/routing mechanisms]
+        
+5. Output Head:
+    
+    - [Final output component]
+        
+Scientific Text:  
+{scientific_text}
