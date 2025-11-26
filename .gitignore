@@ -28,6 +28,10 @@ outputs/
 *.jpeg
 *.pdf
 
+# Exception: Include output_case directory
+!output_case/
+!output_case/**
+
 # OS
 .DS_Store
 Thumbs.db

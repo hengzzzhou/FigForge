@@ -1,33 +1,50 @@
-As an experienced scientific illustrator, your task is to generate a detailed English prompt for an AI image generator (such as Nano Banana) that will create a single, publication-quality scientific figure.
+As an experienced scientific illustrator and AI image prompt designer, your task is to generate a detailed English prompt for an AI image generator (such as Nano Banana) that will create a single, publication-quality scientific figure.
 
 You must:
 
-1. Thoroughly analyze the provided Scientific Text to understand the core concepts, processes, entities, and relationships.
-    
-2. Synthesize this information into a coherent figure design and describe it as a structured MODULE LIST.
+1. Carefully read and analyze the provided Scientific Text to identify:
+   - The main scientific goal of the figure
+   - Key entities/objects (e.g., datasets, samples, cells, models, devices)
+   - Important processes, steps, or relationships
+   - Any quantitative results or comparisons that should appear in the figure
 
-OUTPUT FORMAT:  
+2. Transform this information into a clear, coherent figure design and describe it as a structured MODULE LIST. 
+   - You may assume reasonable details if they are not specified, but keep them scientifically plausible.
+   - Focus on clarity, minimalism, and scientific accuracy. Avoid decorative or irrelevant elements.
+   - Make sure everything is described in English.
+
+OUTPUT FORMAT (return ONLY the following structure, no extra explanations):
+
 MODULE LIST (Brief description of figure content):
 
-1. Input(s):
-    
-    - [List input elements]
-        
-2. Preprocessing/Encoding/Embedding:
-    
-    - [List transformation modules]
-        
-3. Core Architecture/Stages/Blocks:
-    
-    - [List main components in exact sequence]
-        
-4. Special Mechanisms (if applicable):
-    
-    - [Attention/memory/routing mechanisms]
-        
-5. Output Head:
-    
-    - [Final output component]
-        
-Scientific Text:  
+1. Figure Goal and Type:
+   - [1–2 sentences on the purpose of the figure: what question it answers or what concept it explains]
+   - [Specify the figure type: e.g., "conceptual schematic", "workflow diagram", "model architecture diagram", "experimental setup", "comparison bar chart + schematic", etc.]
+
+2. Main Subjects / Inputs:
+   - [List all important entities or inputs that must appear visually, with short descriptions (e.g. "Left: raw microscopy images of cells", "Top: three input signals A/B/C")]
+
+3. Processes / Methods / Stages:
+   - [List key steps, methods, or stages in logical order; each item should say what happens, to what, and where it appears in the figure. For model architectures, describe each block; for experiments, describe each step.]
+
+4. Relationships and Flow:
+   - [Describe how elements are connected (arrows, groupings, timelines, comparisons, feedback loops, etc.), and how the viewer’s eye should move across the figure.]
+
+5. Outputs / Readouts / Results:
+   - [Describe what outputs, metrics, or end states appear, including how they are visualized (e.g., plots, icons, heatmaps, example images, before/after panels).]
+
+6. Layout and Visual Style:
+   - [Describe the global layout: left-to-right or top-to-bottom flow, number of panels (if any), approximate positions of major groups.]
+   - [Specify a clean, professional scientific style: e.g., "flat vector style", "simple color palette with high contrast", "white background", "thin line art", etc.]
+   - [Mention any color-coding scheme (e.g., "blue for method A, orange for method B").]
+
+7. Text Labels and Annotations:
+   - [List key labels, panel titles (if any, e.g. (a), (b), (c)), axis labels, legend elements, and short annotations that should appear in the figure.]
+
+8. Final Nano Banana Prompt (English, single coherent paragraph):
+   - [Combine all the above modules into one detailed prompt that can be directly given to Nano Banana. 
+      Describe the scene, layout, key elements, style, and annotations in natural English, 
+      as if instructing a human scientific illustrator. Do NOT mention 'modules' or 'Scientific Text' here.]
+
+Scientific Text:
 {scientific_text}

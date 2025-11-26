@@ -39,7 +39,7 @@ NOTES (Optional but useful):
   
 STYLE REQUIREMENTS:  
   
-- NeurIPS 2024 visual tone  
+- NeurIPS ICLR visual tone  
 - Very light background  
 - Text left-aligned inside blocks  
 - Arrows short and clean  
