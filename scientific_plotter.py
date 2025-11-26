@@ -114,13 +114,14 @@ class ScientificPlotter:
             print(f"❌ Error generating MODULE LIST: {e}")
             raise
     
-    def generate_figure(self, module_list: str, output_path: Optional[Path] = None) -> Path:
+    def generate_figure(self, module_list: str, output_path: Optional[Path] = None, input_filename: Optional[str] = None) -> Path:
         """
         Step 2: Use Gemini to generate the scientific figure
         
         Args:
             module_list: The MODULE LIST from step 1
             output_path: Optional custom output path for the figure
+            input_filename: Optional input filename to use in output naming
             
         Returns:
             Path to the generated figure
@@ -130,17 +131,18 @@ class ScientificPlotter:
         prompt = self.step2_template.format(module_list=module_list)
         
         if self.api_type == "gemini":
-            return self._generate_figure_gemini(prompt, output_path)
+            return self._generate_figure_gemini(prompt, output_path, input_filename)
         else:
-            return self._generate_figure_openai(prompt, output_path)
+            return self._generate_figure_openai(prompt, output_path, input_filename)
     
-    def _generate_figure_gemini(self, prompt: str, output_path: Optional[Path] = None) -> Path:
+    def _generate_figure_gemini(self, prompt: str, output_path: Optional[Path] = None, input_filename: Optional[str] = None) -> Path:
         """
         Generate figure using native Google Gemini API
         
         Args:
             prompt: The prompt for image generation
             output_path: Optional custom output path for the figure
+            input_filename: Optional input filename to use in output naming
             
         Returns:
             Path to the generated figure
@@ -162,7 +164,11 @@ class ScientificPlotter:
             image_saved = False
             if output_path is None:
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_path = self.output_dir / f"scientific_figure_{timestamp}.png"
+                if input_filename:
+                    base_name = Path(input_filename).stem
+                    output_path = self.output_dir / f"{base_name}_{timestamp}.png"
+                else:
+                    output_path = self.output_dir / f"scientific_figure_{timestamp}.png"
             
             for part in response.parts:
                 if part.text is not None:
@@ -182,13 +188,14 @@ class ScientificPlotter:
             print(f"❌ Error generating figure with Gemini API: {e}")
             raise
     
-    def _generate_figure_openai(self, prompt: str, output_path: Optional[Path] = None) -> Path:
+    def _generate_figure_openai(self, prompt: str, output_path: Optional[Path] = None, input_filename: Optional[str] = None) -> Path:
         """
         Generate figure using OpenAI-compatible API (base64 decoding)
         
         Args:
             prompt: The prompt for image generation
             output_path: Optional custom output path for the figure
+            input_filename: Optional input filename to use in output naming
             
         Returns:
             Path to the generated figure
@@ -247,7 +254,11 @@ class ScientificPlotter:
                 # Save the image
                 if output_path is None:
                     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                    output_path = self.output_dir / f"scientific_figure_{timestamp}.png"
+                    if input_filename:
+                        base_name = Path(input_filename).stem
+                        output_path = self.output_dir / f"{base_name}_{timestamp}.png"
+                    else:
+                        output_path = self.output_dir / f"scientific_figure_{timestamp}.png"
                 
                 output_path.write_bytes(image_data)
                 print(f"✅ Figure saved to: {output_path}")
@@ -271,13 +282,14 @@ class ScientificPlotter:
             print(f"❌ Error generating figure with OpenAI API: {e}")
             raise
     
-    def generate_from_text(self, scientific_text: str, output_path: Optional[Path] = None) -> Path:
+    def generate_from_text(self, scientific_text: str, output_path: Optional[Path] = None, input_filename: Optional[str] = None) -> Path:
         """
         Complete workflow: Generate MODULE LIST and then the figure
         
         Args:
             scientific_text: The scientific text to visualize
             output_path: Optional custom output path for the figure
+            input_filename: Optional input filename to use in output naming
             
         Returns:
             Path to the generated figure
@@ -294,13 +306,17 @@ class ScientificPlotter:
             module_list_path = output_path.with_suffix('.txt')
         else:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            module_list_path = self.output_dir / f"module_list_{timestamp}.txt"
+            if input_filename:
+                base_name = Path(input_filename).stem
+                module_list_path = self.output_dir / f"{base_name}_module_list_{timestamp}.txt"
+            else:
+                module_list_path = self.output_dir / f"module_list_{timestamp}.txt"
         
         module_list_path.write_text(module_list, encoding="utf-8")
         print(f"📝 MODULE LIST saved to: {module_list_path}\n")
         
         # Step 2: Generate figure
-        figure_path = self.generate_figure(module_list, output_path)
+        figure_path = self.generate_figure(module_list, output_path, input_filename)
         
         print("\n" + "="*80)
         print("🎉 Workflow completed successfully!")
@@ -366,8 +382,10 @@ def main(input: Optional[Path], text: Optional[str], output: Optional[Path], mod
         click.echo("⚠️  Warning: Both --input and --text provided. Using --input file.", err=True)
     
     # Read scientific text
+    input_filename = None
     if input:
         scientific_text = input.read_text(encoding="utf-8")
+        input_filename = str(input)
         click.echo(f"📖 Reading from: {input}")
     else:
         scientific_text = text
@@ -397,7 +415,7 @@ def main(input: Optional[Path], text: Optional[str], output: Optional[Path], mod
             output_path.write_text(module_list, encoding="utf-8")
             click.echo(f"\n✅ MODULE LIST saved to: {output_path}")
         else:
-            plotter.generate_from_text(scientific_text, output)
+            plotter.generate_from_text(scientific_text, output, input_filename)
             
     except Exception as e:
         click.echo(f"\n❌ Error during generation: {e}", err=True)

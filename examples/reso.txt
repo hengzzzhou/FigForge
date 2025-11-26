@@ -1,0 +1,73 @@
+\section{Methods}
+To tackle the existing challenges in MAS research, we propose two core innovations: (1) ReSo, a reward-driven self-organizing MAS, which is capable of autonomously adapting to complex tasks and a flexible number of agent candidates, eliminating the need for handcrafted solutions. (2) Introduction of a Collaborative Reward Model (CRM), specifically tailored to optimize MAS performance. CRM can deliver fine-grained reward signals on multi-agent collaboration, enabling data-driven MAS performance optimization.
+
+\subsection{Problem Formulation}
+We define a MAS algorithm \( f_{MAS} \) as a function that, given a natural language question \( Q \), generates a graph-structured task decomposition, solves each subtask, and produces a final answer:
+\begin{equation}
+    f_{MAS}(Q) \rightarrow 
+    \bigl(
+    G = (V, E), \; A_V, \; A_Q
+    \bigr)
+\end{equation}
+
+Here, \( {G} = ({V}, {E}) \) represents the task decomposition graph, which is structured as a directed acyclic graph (DAG). The set of nodes \( {V} = \{v_1, v_2, \dots, v_n\} \) corresponds to the subtasks derived from \( Q \), while the edges \( {E} \subseteq {V} \times {V} \) define the dependencies between these subtasks. The system produces subtask answers \( {A_V} = \{a_{v_1}, a_{v_2}, \dots, a_{v_n}\} \) and ultimately derives the final answer \( {A_Q} \). To achieve this, we decompose \( f_{MAS} \) into two sub-algorithms:
+\begin{equation}
+    f_{MAS}(Q) = f_{agent} \circ f_{task}(Q)
+\end{equation}
+
+ \( f_{task} \) is responsible for constructing the task decomposition graph from the input question, ensuring a structured breakdown of the problem into subtasks and dependencies. \( f_{agent} \) dynamically selects and assigns appropriate agents to solve the identified subtasks. This modular design enables independent optimization of each component, allowing for greater flexibility and scalability. 
+
+For the MAS-generated answer \( A_Q \) to be considered correct, the following conditions must be satisfied: (1) All subtask answers must be correct. (2) All directed edges must correctly enforce the dependency relationships among subtasks. (3) The final output \( A_Q \) must be correct.  
+
+\subsection{Task Graph Construction}
+In the proposed method, \(f_{task}\) first transforms the question \(Q\) into a directed acyclic task graph \(G\):
+\begin{equation}
+    f_{task}: Q \;\;\rightarrow\;\; G = (V, E)
+\end{equation}
+where \(G\) represents the decomposition of the original task \(Q\). Each node \(v_i \in V\) is a natural language subtask, and each directed edge \((v_i \rightarrow v_j) \in E\) indicates that the subtask \(v_j\) depends on the successful completion of \(v_i\). 
+
+In practice, we perform supervised fine-tuning (SFT) on an LLM to perform this step of task decomposition. Using our synthetic data, we explicitly require the LLM to decompose \(Q\) into logical sub-problems, specify their execution order and dependencies, and output in a format of DAG.
+
+\subsection{Two-Stage Agent Search}
+Once the task graph is obtained, we need to assign each subtask to the most appropriate agent. We denote this agent assignment procedure as \(f_{agent}\). Conceptually, \(f_{agent}\) classifies each node in the task graph according to the most suitable agent from a large agent pool $\mathcal{A}$, constructing an \textit{agent graph} that maps each node to one or more selected agents.
+\begin{equation} 
+f_{agent}: v_i \in V \;\;\rightarrow\;\; a_i \in \mathcal{A} \end{equation}
+Since $\mathcal{A}$ can contain a large number of agents, we first introduce the concept of Dynamic Agent Database. Then we decompose the agent graph construction on every subtask into two search algorithms from coarse to fine-grained: first, select a subset of candidates from DADB then utilize the reward model to evaluate and select the best agent.
+
+\subsubsection{Dynamic Agent Database}  
+To increase MAS's scalability and flexibility, we propose the Dynamic Agent Database (DADB), denoted as $\mathcal{A}$, which enables adaptive agent selection by maintaining both \textbf{static} and \textbf{dynamic} agent profiles. For each agent $a_i \in \mathcal{A}$, its static profile includes the base model, role settings, initial prompt, long-term memory, and tools. The dynamic profile, continuously updated via the reward model, tracks the agent’s average reward \(R(a_i)\), computational cost \(C(a_i)\), and task count \(n(a_i)\). Initially, agents have only static attributes, while training iteratively refines their evaluations by the process reward model, optimizing future selection.
+
+Given an input task \(v_j\), the DADB assigns a preliminary quality score \(Q(a_i, v_j)\) to each agent \(a_i\), balancing task-agent similarity, historical performance, and computational costs:
+\begin{equation}
+    Q(a_i,v_j) \;=\; \mathrm{sim}(a_i,v_j)\cdot \mathrm{perform}(a_i)
+\end{equation} where \(\mathrm{sim}(a_i,v_j)\) represents the similarity between the subtask’s target profile and the agent’s static profile. In practice, we employ a Heaviside function which ensures that only agents exceeding a predefined similarity threshold \(V_{th}\) are considered:
+$ \mathrm{sim}(a_i,v_j)\; = \; H[ \langle\mathbf{q_i},\mathbf{a_i}\rangle - V_{th}]
+$ where $\mathbf{q_i}, \mathbf{a_i}$ are text embedding of subquestion and the agent static profile. The \(\mathrm{perform}(a_i)\) term is given by $\mathrm{perform}(a_i) \;=\; R(a_i) \;-\; \beta C(a_i)$, where \(\beta\) controls the trade-off between the agent's historical performance and cost.
+
+\subsubsection{Coarse Agent Search by UCB}
+Given a DADB $\mathcal{A}$ and a subtask $v_j$, our first objective is to retrieve a promising subset of \(k\) candidate agents. To take advantage of the known information in DADB, also to explore unused agents, we adopt an Upper Confidence Bound value:
+\begin{equation}
+    \text{UCB}(a_i,q_j) \;=\; Q(a_i,q_j) \;+\; c \sqrt{\frac{N}{n(a_i) + \varepsilon}} 
+\end{equation}
+where $N$ is the total number of agent selections and $n(a_i)$ the number of times agent $i$ is selected, $\varepsilon \ll1$. \(c\) is a constant controlling the exploration-exploitation trade-off. Agents with higher UCB scores are more likely to be selected, helping the MAS to explore potentially under-utilized agents. For each subtask $q_i$, we sort agents by their $\text{UCB}(a_i, q_j)$ and choose the top \(k\) agents as the candidate set \({A}_{\text{cand}} = \{\,a_1, a_2,\dots,a_k\}\).
+
+\subsubsection{Fine-grained Agent Evaluation by CRM}
+\label{sec:crm}
+Once the candidate agents \(\mathcal{A}_{\text{cand}}\) are selected, we evaluate their performance on the current subtask \( v_j \) using a Collaborative Reward Model (CRM). This evaluation process is straightforward: each candidate agent \( a_i \) generates an answer to the subtask \( v_j \): \( a_i(v_j) \), and then we assess the quality of that answer based on a reward signal:
+\begin{equation}
+    r(a_i, v_j) \;=\; \text{RewardModel}\Bigl(a_i, v_j, a_i(v_j)\Bigr)
+\end{equation}
+where \(\text{RewardModel}\) evaluates the quality of the solution based on the given agent’s profile, subtask, and previous reasoning process. After evaluating the agents, we assign the agent with the highest reward, \( a_j^* \), to the subtask node \( v_j \), which means \( a_j^* \)’s solution is used as \( v_j \)'s answer. This process is repeated for each subtask on the graph.
+
+The reward \( r(a_i, v_j) \) is computed using the CRM, which can be either rule-based (e.g., binary correctness: 0 for incorrect, 1 for correct) or neural-based (providing a score between 0 and 1 for quality). The reward model evaluates how well the agent’s response aligns with the expected outcome, factoring in both the solution's correctness and its collaboration within the MAS.
+
+\subsection{Training and Inference Stage}
+Our multi-agent system can operate in two modes: training and testing. During \textbf{training}, we leverage a high-quality reward $r(a_i, v_j)$ available for evaluating the correctness of every step of MAS. Upon receiving \(r(a_i, v_j)\) for each candidate agent, we update that agent's dynamic profile in DADB. For instance, we may maintain a running average of rewards:
+\begin{equation}
+    R(a_i) \;\leftarrow\; \frac{n(a_i)\cdot R(a_i) + r(a_i, v_j)}{n(a_i)+1}
+\end{equation}
+similar for updating $cost c(a_i, v_j)$. By iteratively learning from data, the DADB can dynamically update agent evaluations based on historical reward, facilitating adaptive agent selection and improving both efficiency and performance. During \textbf{testing}, the reward model is no longer required. Instead, we leverage the learned DADB to select the best agent candidates and the best answer to each subtask.
+
+\subsection{The Perspective of MCTS}The task graph, after topological sorting, forms a decision tree where each node represents a subtask and the edges denote dependencies. At each level, we use UCB to prune the tree and select a subset of promising agents, then simulate each agent and evaluate their performance using the CRM. The resulting reward updates the agent’s dynamic profile, refining the selection strategy. The MAS construction is essentially finding the optimal path from the root to the leaves, maximizing the UCB reward for the best performance.
+
+Consider there are \( N \) agents and a task requiring \( D \) agents to collaborate. Assume that the average inference cost is $c$ and the matching cost in DADB is $s \ll c$ per agent. A brute-force search has a complexity of \( O(c \cdot N^D) \), which becomes infeasible as \( D \) and \( D \) grow. In contrast, our self-organizing strategy, selecting top$k$ per step, reduces the cost to \( O((s \cdot N + N \log N + k \cdot c) \cdot D) \), offering a near-linear scaling with \( N \) and \( D \), making the approach highly scalable for large $N$ and $D$.

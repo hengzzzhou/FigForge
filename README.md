@@ -87,6 +87,30 @@ python scientific_plotter.py -i input.txt -o my_awesome_figure.png
 python scientific_plotter.py -i input.txt --module-list-only
 ```
 
+## 📸 Examples
+
+Here are some scientific figures generated using FigForge:
+
+### Sample Input - Neural Architecture
+
+![sample_input_1.png](output_case/sample_input_1.png)
+
+### [LiveSearchBench](https://arxiv.org/abs/2511.01409)
+
+![livesearchbench.png](output_case/livesearchbench.png)
+
+### [ReSo](https://arxiv.org/abs/2503.02390)
+
+![reso.png](output_case/reso.png)
+
+### [VIKI-R](https://arxiv.org/abs/2506.09049)
+
+![viki-r.png](output_case/viki-r.png)
+
+> All figures are generated with clean conference-style design, featuring flat aesthetics, consistent line weights, and professional color palettes.
+
+---
+
 ## 📖 How It Works
 
 ### Step 1: MODULE LIST Generation (GPT-5)
@@ -103,7 +127,7 @@ The GPT-5 model analyzes your scientific text and creates a structured MODULE LI
 
 Using the MODULE LIST as a guide, nano banana generates a clean, professional figure following these design principles:
 
-- ✅ Flat, clean NeurIPS style (no gradients, shadows)
+- ✅ Flat, clean conference style (no gradients, shadows)
 - ✅ Consistent thin line weights
 - ✅ Professional pastel color palette
 - ✅ Rounded rectangles for module blocks
@@ -146,17 +170,17 @@ MODULE LIST:
 [Structured breakdown of your architecture...]
 ================================================================================
 
-📝 MODULE LIST saved to: outputs/module_list_20231125_143022.txt
+📝 MODULE LIST saved to: outputs/sample_input_module_list_20231125_143022.txt
 
 🎨 Step 2: Generating figure using gemini-2.5-flash-image...
 💾 Downloading image from: [URL]
-✅ Figure saved to: outputs/scientific_figure_20231125_143022.png
+✅ Figure saved to: outputs/sample_input_20231125_143022.png
 
 ================================================================================
 🎉 Workflow completed successfully!
 ================================================================================
-📄 MODULE LIST: outputs/module_list_20231125_143022.txt
-🖼️  Figure: outputs/scientific_figure_20231125_143022.png
+📄 MODULE LIST: outputs/sample_input_module_list_20231125_143022.txt
+🖼️  Figure: outputs/sample_input_20231125_143022.png
 ================================================================================
 ```
 
