@@ -1,0 +1,103 @@
+\section{VIKI-R}
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=1\textwidth]{Figure/viki-r_v7.pdf}
+    \vspace{-2mm}
+    \caption{Framework of \mname{}. We adopted supervised fine-tuning (SFT) and reinforcement fine-tuning on the VIKI dataset, incorporating format and accuracy rewards to optimize the policy model.}
+    \label{fig:overview_viki_r}
+\end{figure}
+\subsection{Overview}
+We introduce \mname{}, a two-stage fine-tuning framework that endows vision–language models with robust visual reasoning abilities, as shown in Fig.~\ref{fig:overview_viki_r}. In the first stage, \emph{SFT-based Warmup}, the model undergoes supervised fine-tuning on high-quality Chain-of-Thought (CoT) annotations, optimizing the likelihood of both intermediate reasoning steps and final answers. This stage instructs the model to acquire domain-specific reasoning patterns. In the second stage, \emph{Reinforcement Fine-Tuning}, the policy is refined using the Grouped Relative Proximal Optimization (GRPO) algorithm~\cite{shao2024deepseekmath}. For each visual–question pair, grouped candidate answers are sampled and evaluated using a composite reward function based on answer format and correctness. Standardized advantages are then computed to guide policy updates under a KL-divergence constraint, ensuring stable and consistent improvement. 
+% Together, these two phases synergize to push the model's reasoning performance to new heights.
+\subsection{Training Objectives}
+\paragraph{SFT-based Warmup}
+In the first phase, we employ Supervised Fine-Tuning (SFT) with data annotated with Chain-of-Thought (CoT) reasoning process. Each training instance is denoted as \((x, q, r, a)\), where \(x\) represents the visual input, \(q\) the associated task, \(r\) the intermediate reasoning steps, and \(a\) the final answer. The SFT objective maximizes the joint likelihood of the reasoning and answer tokens conditioned on the input:
+\begin{equation}
+\mathcal{L}_{\mathrm{SFT}}
+= -\mathbb{E}_{(x,q,r,a)\sim\mathcal{D}}
+  \sum_{t=1}^{T}
+    \log \pi_{\theta}\bigl(y_{t}\mid x, q, y_{<t}\bigr),
+\label{eq:sft_activation}
+\end{equation}
+where \(\mathcal{D}\) is the CoT-annotated dataset, \(y=[r,a]\) is the concatenated sequence of reasoning and answer tokens, and \(\pi_{\theta}\) denotes the model’s token distribution. 
+% The resulting policy \(\pi_{\mathrm{CoT}}\) provides a strong initialization for subsequent reinforcement fine-tuning.
+
+\paragraph{Reinforcement Fine-Tuning}
+Starting from the Chain-of-Thought initialized policy $\pi_{\mathrm{CoT}}$, we perform group-relative reinforcement fine-tuning following the GRPO formulation.
+Given an input $s=(x,q)$, we sample a group of $G$ candidate outputs $\{a_i\}_{i=1}^{G}$, each receiving a reward $R_i$. 
+We compute the empirical mean $\bar{R}$ and standard deviation $\sigma_R$ of the group, and define the standardized advantage for each candidate as
+\begin{equation}
+\mathcal{A}_i = \frac{R_i - \bar{R}}{\sigma_R}.
+\label{eq:grpo_adv}
+\end{equation}
+This group-relative normalization highlights candidates that outperform their peers and stabilizes learning by removing dependence on absolute reward scale.The probability ratio between the current policy $\pi_{\theta}$ and the reference policy $\pi_{0}$ (initialized from $\pi_{\mathrm{CoT}}$) is defined as
+\begin{equation}
+r_i(\theta) = \frac{\pi_{\theta}(a_i \mid s)}{\pi_{0}(a_i \mid s)}.
+\label{eq:grpo_ratio}
+\end{equation}
+The clipped surrogate objective is then given by
+\begin{equation}
+\mathcal{L}^{\mathrm{CLIP}}(\theta)
+ = \mathbb{E}_{s}\Bigg[\sum_{i=1}^{G}
+   \min\Big(r_i(\theta)\mathcal{A}_i,\;
+   \mathrm{clip}\big(r_i(\theta),\,1-\epsilon,\,1+\epsilon\big)\mathcal{A}_i\Big)
+   \Bigg],
+\label{eq:grpo_clip_obj}
+\end{equation}
+where $\epsilon$ is the clipping coefficient that bounds the policy update step.
+
+Finally, the policy is optimized under a KL-divergence constraint to maintain proximity to the reference policy:
+\begin{equation}
+\mathcal{J}(\theta)
+ = \mathcal{L}^{\mathrm{CLIP}}(\theta)
+   - \beta\,\mathrm{D_{KL}}\!\big(\pi_{\theta}(\cdot\mid s)\,\|\,\pi_{0}(\cdot\mid s)\big),
+\label{eq:grpo_final_obj}
+\end{equation}
+where $\beta>0$ controls the trust region enforced by the KL regularizer.
+This GRPO formulation enables stable and sample-efficient reinforcement fine-tuning, allowing the policy to leverage group-relative advantages for compositional spatial reasoning.
+% ensuring stable improvement under a KL constraint.
+
+\subsection{Reward Design}
+To guide the model towards both structured output and task accuracy, we formulate the overall reward into a \textit{format reward} and a task-specific \textit{accuracy reward}, as:
+\begin{equation}
+R = \lambda_{1} \times R_{\mathrm{format}} + \lambda_2 \times R_{\mathrm{acc}},
+\end{equation}
+where $R_{\mathrm{format}}$ enforces the output format and $R_{\mathrm{acc}}$ corresponds to the three subtask rewards, as defined below. $\lambda_{1}$ and $\lambda_{2}$ refer to the weights of both rewards, respectively.
+\paragraph{Format Reward}
+To encourage explicit reasoning, we assign a binary format reward: the model receives 1 point if it correctly encloses the intermediate reasoning steps within \texttt{<think>}…\texttt{</think>} and the final answer within \texttt{<answer>}…\texttt{</answer>}, and 0 otherwise. By enforcing these tags, we prompt the model to articulate its chain-of-thought before delivering the answer, thereby improving interpretability and guiding systematic reasoning.
+
+\paragraph{Agent Activation Reward}
+We define the agent activation reward as an exact‐match indicator between the predicted agent set $S_{\mathrm{pred}}$ and the ground‐truth set $S_{\mathrm{gt}}$:
+\begin{equation}
+R_{\mathrm{acc}}^{L1}
+=
+\begin{cases}
+1, & \text{if }S_{\mathrm{pred}} \equiv S_{\mathrm{gt}},\\
+0, & \text{otherwise}.
+\end{cases}
+\label{eq:activation_reward}
+\end{equation}
+\paragraph{Task Planning Reward}
+While multiple feasible plans may exist, we define the reward to favor efficient solutions. Specifically, a predicted plan $A$ only receives the reward if it is feasible and its length does not exceed that of the ground-truth plan $N_{\mathrm{gt}}$. Let $N(A)$ denote the length of the predicted action sequence $A$, the task planning reward is defined as:
+\begin{equation}
+R_{\mathrm{acc}}^{L2} =
+\begin{cases}
+1, & \text{if $A$ is feasible and } N(A) \le N_{\mathrm{gt}}, \\
+0, & \text{otherwise}.
+\end{cases}
+\label{eq:planning_reward}
+\end{equation}
+Details on how plan feasibility is checked are provided in Appendix \ref{sec:supp-check}.
+\paragraph{Trajectory Perception Reward}
+Let $P^{(k)}=\{p^{(k)}_t\}_{t=1}^T$ and $G^{(k)}=\{g^{(k)}_t\}_{t=1}^T$ denote the predicted and ground‐truth trajectories for agent $k$, respectively. To evaluate trajectory prediction quality for each agent $k$, we compute three normalized standard geometric distance metrics between the predicted trajectory and the ground-truth trajectory: Root Mean Square Error (RMSE, denoted as $\hat{d}_{\mathrm{RMSE}}$), Hausdorff Distance (HD, denoted as $\hat{d}_{\mathrm{HD}}$)\cite{huttenlocher1993hausdorff}, and Discrete Fréchet Distance (DFD, denoted as $\hat{d}_{\mathrm{DFD}}$)\cite{eiter1994frechet}. Since smaller distances indicate better alignment between predicted and ground-truth trajectories, we transform the distance $\hat{d}$ into a reward-like score using the transformation $r = 1 - \hat{d}$. The final trajectory perception reward is defined as:
+% The final trajectory perception reward is defined as the average of all reward-like scores across agents and distance metrics:
+\begin{equation}
+R_{\mathrm{acc}}^{L3} =
+\frac{1}{3K}
+\sum_{k=1}^{K} \left(
+    r^{(k)}_{\mathrm{RMSE}} +
+    r^{(k)}_{\mathrm{HD}} +
+    r^{(k)}_{\mathrm{DFD}}
+\right),
+\label{eq:tracking_reward}
+\end{equation}

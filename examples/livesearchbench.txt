@@ -1,0 +1,98 @@
+\subsection{Problem Formulation}
+
+To address the evolving nature of world knowledge, we propose leveraging the dynamic updates of the Wikidata knowledge graph to construct question-answering (QA) problems. As Wikidata continually incorporates new information, it provides a rich source of facts that can be used to generate up-to-date QA instances. Building on this idea, we formalize QA in the context of dynamic knowledge graphs. 
+Let $\mathcal{G}=(\mathcal{V},\mathcal{E})$ denote the Wikidata knowledge graph, where $\mathcal{V}$ is the set of entities and literals, and $\mathcal{E}$ is the set of directed triples $(h,r,t)$ with head $h\in\mathcal{V}$, relation $r$, and tail $t\in\mathcal{V}$. A question $q$ is formalized as a constrained path query over $\mathcal{G}$, and the gold answer $a^\star\in\mathcal{V}$ (or a literal) must be \emph{unique} under these constraints. 
+\begin{equation}
+    \text{Answer}(q, \mathcal{G}_{T_1}) \;=\; a^\star
+\end{equation}
+This uniqueness requirement, validated against the snapshot $\mathcal{G}_{T_1}$ via SPARQL queries, ensures that every benchmark instance admits a single, verifiable solution. Consequently, once the \emph{new or updated} triples between two snapshots are extracted, the benchmark can be constructed automatically through a unified pipeline, without the need for manual annotation or domain-specific heuristics.
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=1.0\linewidth]{images/livesearchbench.pdf}
+    \caption{Overview of the generation pipeline. We compute a \emph{knowledge delta} between two Wikidata snapshots to obtain new or updated subject–relation–object (SRO) triples. After relation and entity based filtering, candidate triples are used to synthesize questions at three difficulty tiers: (L1) single-hop, (L2) multi-constraint multi-hop, and (L3) multi-hop with attribute fuzzing. All questions are verified against the current snapshot via SPARQL to ensure correctness.}
+    \label{fig:pipeline}
+\end{figure}
+
+\subsection{Benchmark Design and Generation Pipeline}
+
+\paragraph{Design Goals.}
+Our aim is to build a continually updating benchmark that faithfully reflects the evolving nature of world knowledge. The design is guided by four principles: 
+\ding{172} questions should target \emph{recent} facts unlikely to reside in an LLM’s parametric memory; 
+\ding{173} each instance must admit a \emph{unique}, verifiable answer grounded in a public knowledge base; 
+\ding{174} the benchmark should offer controllable difficulty through structured hop levels; and 
+\ding{175} the pipeline should be \emph{fully automated}, ensuring scalability and sustainability with minimal human intervention. 
+We instantiate these goals on \textsc{Wikidata}, leveraging its continually evolving knowledge graph and SPARQL endpoint. This setup guarantees freshness and verifiability while enabling systematic control over reasoning complexity without costly manual curation.
+Figure~\ref{fig:pipeline} presents an overview of our pipeline, which transforms evolving knowledge in \textsc{Wikidata} into retrieval-dependent QA instances. The process is fully automated and proceeds in four main stages. Pseudocode for the full pipeline is provided in Appendix~\S\ref{app:pseudocode}.
+
+\paragraph{Step 1: Differential Knowledge Extraction.}  
+We take two Wikidata snapshots at times $T_0$ and $T_1$ ($T_1 > T_0$) and normalize each into a set of SRO triples, $\mathcal{G}_{T_0}$ and $\mathcal{G}_{T_1}$.  
+We then construct the \emph{knowledge delta} as the union of insertions and updates:  
+\[
+\Delta^+ \!=\! \{\, t \in \mathcal{G}_{T_1} \setminus \mathcal{G}_{T_0} \,\},\quad
+\Delta^\circ \!=\! \{\, (s,r,o_1)\!\in\!\mathcal{G}_{T_0},\ (s,r,o_2)\!\in\!\mathcal{G}_{T_1}\!:\ o_1\!\neq\!o_2 \,\},\quad
+\Delta \!=\! \Delta^+ \cup \Delta^\circ.
+\]  
+Here, $\Delta^+$ captures newly added facts, and $\Delta^\circ$ captures \emph{updated} statements where the object set for a given $(s,r)$ changed between snapshots.  
+Every instance therefore anchors to information that post-dates typical pretraining corpora, discouraging memorization and encouraging retrieval.
+
+\paragraph{Step 2: Candidate Filtering.}  
+The raw delta may contain noisy or underspecified triples. We apply three filters:  
+(i) Relation allow-list. We exclude non-informative predicates using a curated allow-list.  
+(ii) Entity quality and disambiguation. We require language coverage for labels/aliases, prune entities with incomplete metadata, and remove items whose surface forms are highly ambiguous without additional qualifiers.  
+(iii) Statement validity. We drop deprecated or contradictory statements and deduplicate near-duplicates using normalized keys.  
+The result is a pool of recent, interpretable triples suitable for question synthesis.
+
+\paragraph{Step 3: Hierarchical Question Synthesis.}  
+From the curated triples, we synthesize questions at three levels, enforcing a single correct answer via SPARQL \texttt{COUNT=1}.  
+L1 (single-hop): directly materialize a triple $(a,r,b)$ and keep it only if $b$ is uniquely identifiable in $\mathcal{G}_{T_1}$.  
+L2 (multi-constraint): start from a target entity and iteratively add attribute constraints (e.g., occupation, country, affiliation), checking after each addition whether uniqueness is achieved; we stop when \texttt{COUNT=1}.  
+L3 (multi-hop with fuzz): extend L2 by (a) relaxing an attribute to a broader type/hypernym (``fuzzing'') and (b) appending one relational hop; we verify that, despite fuzzing and the extra hop, the query still resolves to a single answer.
+
+\paragraph{Step 4: Finalization and Validation.}  
+We render each query into natural language using contemporaneous labels and templates, then perform a final SPARQL verification against the $T_1$ snapshot to re-check uniqueness and temporal validity after rendering and de-duplication.  
+This final check is necessary because alias normalization, template realization, or batch de-duplication can inadvertently alter constraint bindings and reintroduce ambiguity; additionally, late-arriving snapshot updates may occur during long runs. 
+For reproducibility, we log snapshot hashes and timestamps so that every instance is traceable to its underlying state.  
+
+Further discussion and examples are provided in Appendix~\S\ref{app:finalcheck}, where we describe the full pipeline, filtering composition, and synthesis rules in detail.
+
+\subsection{Question Complexity Levels}
+As illustrated in Figure~\ref{fig:pipeline}, we define three levels of difficulty. The L1–L3 hierarchy defines a controlled progression of difficulty: fact retrieval (L1), compositional reasoning (L2), and ambiguity resolution under fuzziness (L3). By enforcing uniqueness of answers in $\mathcal{G}_{T_1}$, the benchmark remains both rigorous and auditable while reflecting real-world query complexity.
+
+
+\paragraph{Level-1 (L1): Single-Hop with Uniqueness.}
+Given a source entity $a \in \mathcal{V}$ and a relation $r \in \mathcal{R}$, the task is to identify the unique target $b$ such that
+\begin{equation}
+|\{b : (a,r,b)\in\mathcal{E}\}|=1.
+\end{equation}
+For example, if the knowledge delta introduces the triple (\texttt{ICLR2026}, \emph{country}, \texttt{Brazil}), the corresponding L1 question is: \emph{``In which country will the ICLR2026 conference be held?''} L1 primarily evaluates factual recall of newly introduced triples.
+
+\paragraph{Level-2 (L2): Multi-Hop via Constrained Intersection.}
+To model compositional reasoning, we construct queries where two or more relational paths must intersect in exactly one entity:
+\begin{equation}
+S_1 = \{x \mid (a,r_1,x)\in\mathcal{E}\}, \quad
+S_2 = \{x \mid (a',r_2,x)\in\mathcal{E}\}, \quad |S_1 \cap S_2|=1.
+\end{equation}
+For instance, given the triples (\texttt{Real Madrid}, \emph{player}, \texttt{Cristiano Ronaldo}), (\texttt{Juventus}, \emph{player}, \texttt{Cristiano Ronaldo}), and (\texttt{Al Nassr}, \emph{player}, \texttt{Cristiano Ronaldo}), the benchmark synthesizes the question: \emph{``Which football player has played for Real Madrid, Juventus, and Al Nassr?''} The uniqueness of the intersection ensures that the answer is well defined.
+
+\paragraph{Level-3 (L3): Attribute Fuzzing with an Additional Hop.}
+L3 raises difficulty by deliberately enlarging candidate sets through fuzzing and then adding a disambiguating constraint. Formally,
+\begin{equation}
+S_1' = \text{fuzz}(S_1), \quad S_2' = \text{fuzz}(S_2), \quad |S_1' \cap S_2' \cap S_3|=1.
+\end{equation}
+For example, consider (\texttt{Real Madrid}, \emph{player}, \texttt{Cristiano Ronaldo}), (\texttt{Juventus}, \emph{player}, \texttt{Cristiano Ronaldo}), and (\texttt{Al Nassr}, \emph{player}, \texttt{Cristiano Ronaldo}). Instead of fixing \texttt{Al Nassr}, we fuzz it into the broader category ``a Saudi Arabian club,'' represented by (\texttt{Saudi Arabian}, \emph{has club}, \texttt{Al Nassr}). The resulting question becomes: \emph{``Which football player has played for Manchester United, Real Madrid, Juventus, and a Saudi Arabian club?''} This fuzzing step broadens the candidate pool, while the added constraint ensures a unique answer.
+
+
+\begin{figure}[t]
+    \centering
+    \includegraphics[width=1\linewidth]{images/searchbench_data.pdf}
+    \caption{Dataset statistics of \textsc{LiveSearchBench}. (a) Distribution of questions across difficulty tiers L1–L3. (b) Frequency of the most common relation types in synthesized triples. Together, these plots illustrate both the diversity of reasoning requirements and the breadth of relation coverage in our benchmark.}
+    \label{fig:dataset}
+\end{figure}
+
+\subsection{Dataset Collection}
+To build the benchmark, we applied our pipeline to two pairs of Wikidata snapshots. For the recent setting, we used the May 2025 and August 2025 dumps to create \textsc{LiveSearchBench-2025}; for the historical setting, we used the September 2021 and December 2021 dumps to create \textsc{LiveSearchBench-2021}. In both cases, all instances are grounded in facts that appeared strictly after the earlier snapshot, ensuring temporal recency and reducing overlap with pretraining data.
+While the pipeline can generate much larger datasets, we opted for a cost-efficient representative subset: 150 L1, 100 L2, and 50 L3 questions. This stratified sample balances reasoning diversity with evaluation efficiency and suffices for robust comparative analysis.  
+Dataset statistics for \textsc{LiveSearchBench} are shown in Figure~\ref{fig:dataset}, illustrating the distribution of questions across difficulty tiers (L1–L3) and the variety of relation types in the synthesized triples.
+To guarantee quality, five PhD researchers reviewed the synthesized triples and reasoning paths behind each question. Their inspection confirmed the validity and clarity of the 600 questions set, establishing \textsc{LiveSearchBench} as a reliable evaluation resource.
